@@ -1,2 +1,2 @@
 # abu
-A AWS Cluster Manager
+An AWS Cluster Manager
