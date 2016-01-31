@@ -40,7 +40,6 @@ class AWSInstance(object):
         self.job_id = job_id
 
     def update(self, abu):
-
         if self.status is not InstStatus.DEAD:
             if self.status is InstStatus.UNSTARTED:
                 stats = abu.conn.get_all_instance_status([self.inst_id])
@@ -69,12 +68,25 @@ class AWSInstance(object):
                     else: 
                         self.status = InstStatus.INITIALIZING
             elif self.status is InstStatus.RUNNING or self.status is InstStatus.IDLE:
+                is_dead = False
+                stats = abu.conn.get_all_instance_status([self.inst_id])
+                if not stats:
+                    is_dead = True
+                else: 
+                    stat = stats[0]
+                    if not(str(stat.system_status) == "Status:ok" and str(stat.instance_status) == "Status:ok"): 
+                        is_dead = True
+
                 if not self.is_alive():
+                    is_dead = True
+
+                if is_dead:
                     self.status = InstStatus.DEAD
                     if self.job_id in abu.job_pool:
                         abu.job_pool[self.job_id].inst_id = None
                         abu.job_pool[self.job_id].status = JobStatus.DEAD
                     self.job_id = None
+
 
     def terminate(self, abu):
         if abu.conn: 
@@ -217,7 +229,7 @@ class Abu(object):
             self.terminate_instance()
 
     def gen_nfs_cmd(self):
-        mount_cmd = ";".join([" (sudo mount " + self.nfs_mount_dict['host'] + ":" + directory + " " + directory + ")" for directory in self.nfs_mount_dict['mount_dirs']])
+        mount_cmd = ";".join([" (mkdir -p " + directory + "; sudo mount " + self.nfs_mount_dict['host'] + ":" + directory + " " + directory + ")" for directory in self.nfs_mount_dict['mount_dirs']])
         return mount_cmd
 
     def gen_ssh_cmd(self,cmd, host, log_path = "/dev/null", err_path = "/dev/null", done_path = "/dev/null"):
