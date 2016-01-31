@@ -376,7 +376,8 @@ class Abu(object):
 
             client_cmd = ' '.join([self.client_path, cmds_list_path, str(head_num), str(tail_num), str(proc_per_instance), start_file, end_file])
             #final_cmd = time_limit_cmd + "; " + crop_cmd + " | " + xargs_cmd 
-            final_cmd = time_limit_cmd + "; " + client_cmd
+            mount_nfs_cmd = self.gen_nfs_cmd()
+            final_cmd = time_limit_cmd + ";" +  mount_nfs_cmd + "; " + client_cmd
             self.job_ids.append(job_id)
             self.job_pool[job_id] = AWSJob(job_id, final_cmd, log_file, err_file, done_file, start_file, end_file)
             cmd_idx += 1
