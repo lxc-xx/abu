@@ -3,6 +3,7 @@ import sys
 import time
 import boto
 import boto.ec2
+from boto.exception import EC2ResponseError
 from datetime import datetime
 import commands
 from enum import Enum
@@ -250,7 +251,6 @@ class Abu(object):
         inst = resv.instances[0] 
         start_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         self.conn.create_tags([inst.id], {"Name": "{%s %s}" % (self.clust_name,start_time) })
-
         return inst.id
 
 
@@ -264,11 +264,16 @@ class Abu(object):
                 self.insts_pool[new_inst_id] = new_inst
         else:
             for i in range(self.inst_num): 
-                new_inst_id  = self.new_instance()
-                self.inst_ids.append(new_inst_id)
-                print "Creating instgance: " + new_inst_id
-                new_inst = AWSInstance(new_inst_id, self.hearts_path)
-                self.insts_pool[new_inst_id] = new_inst
+                try: 
+                    new_inst_id  = self.new_instance()
+                    self.inst_ids.append(new_inst_id)
+                    print "Creating instgance: " + new_inst_id
+                    new_inst = AWSInstance(new_inst_id, self.hearts_path)
+                    self.insts_pool[new_inst_id] = new_inst
+                except EC2ResponseError:
+                    print "Instance creation failed. Check your limit."
+
+        self.inst_num = len(self.inst_ids)
 
         while True: 
             
