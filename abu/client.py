@@ -27,8 +27,8 @@ def main(argv):
 
     if os.path.exists(cmds_list_path): 
         touch(start_file_path) 
-        cmd = "head -%s %s | tail -%s | xargs -L 1 -I {} -P %s dumb.py {}" % (head, cmds_list_path, tail, parallel) 
-        proc = subprocess.Popen(cmd, shell=True) 
+        cmd = "head -%s %s | tail -%s | parallel -j %s" % (head, cmds_list_path, tail, parallel) 
+        proc = subprocess.Popen(cmd, shell=True, executable="/bin/bash") 
         proc.wait() 
         touch(end_file_path)
 

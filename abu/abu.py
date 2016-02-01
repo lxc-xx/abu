@@ -43,42 +43,52 @@ class AWSInstance(object):
     def update(self, abu):
         if self.status is not InstStatus.DEAD:
             if self.status is InstStatus.UNSTARTED:
-                stats = abu.conn.get_all_instance_status([self.inst_id])
-                if stats: 
-                    self.status = InstStatus.INITIALIZING
-                else:
-                    timer = time.time()
-                    wait = timer - self.timer
+                try:
+                    stats = abu.conn.get_all_instance_status([self.inst_id])
+                    if stats: 
+                        self.status = InstStatus.INITIALIZING
+                    else:
+                        timer = time.time()
+                        wait = timer - self.timer
 
-                    if wait > self.patience:
-                        self.status = InstStatus.DEAD
+                        if wait > self.patience:
+                            self.status = InstStatus.DEAD
+                except EC2ResponseError:
+                    self.status = InstStatus.DEAD
 
             elif self.status is InstStatus.INITIALIZING:
-                stats = abu.conn.get_all_instance_status([self.inst_id])
-                if not stats:
-                    self.status = InstStatus.DEAD
-                else: 
-                    stat = stats[0]
-                    if str(stat.system_status) == "Status:ok" and str(stat.instance_status) == "Status:ok": 
-                        #self.mount_nfs(abu)
-                        #self.start_heart_beat(abu)
-                        self.get_ip(abu)
-                        self.mount_nfs(abu)
-                        self.start_heart_beat(abu)
-                        self.status = InstStatus.IDLE
+                try: 
+                    stats = abu.conn.get_all_instance_status([self.inst_id])
+                    if not stats:
+                        self.status = InstStatus.DEAD
                     else: 
-                        self.status = InstStatus.INITIALIZING
+                        stat = stats[0]
+                        if str(stat.system_status) == "Status:ok" and str(stat.instance_status) == "Status:ok": 
+                            #self.mount_nfs(abu)
+                            #self.start_heart_beat(abu)
+                            self.get_ip(abu)
+                            self.mount_nfs(abu)
+                            self.start_heart_beat(abu)
+                            self.status = InstStatus.IDLE
+                        else: 
+                            self.status = InstStatus.INITIALIZING
+                except EC2ResponseError:
+                    self.status = InstStatus.DEAD
+
             elif self.status is InstStatus.RUNNING or self.status is InstStatus.IDLE:
                 is_dead = False
-                stats = abu.conn.get_all_instance_status([self.inst_id])
-                if not stats:
-                    is_dead = True
-                else: 
-                    stat = stats[0]
-                    if not(str(stat.system_status) == "Status:ok" and str(stat.instance_status) == "Status:ok"): 
+                try: 
+                    stats = abu.conn.get_all_instance_status([self.inst_id])
+                    if not stats:
                         is_dead = True
+                    else: 
+                        stat = stats[0]
+                        if not(str(stat.system_status) == "Status:ok" and str(stat.instance_status) == "Status:ok"): 
+                            is_dead = True
 
-                if not self.is_alive():
+                    if not self.is_alive():
+                        is_dead = True
+                except EC2ResponseError:
                     is_dead = True
 
                 if is_dead:
@@ -87,11 +97,19 @@ class AWSInstance(object):
                         abu.job_pool[self.job_id].inst_id = None
                         abu.job_pool[self.job_id].status = JobStatus.DEAD
                     self.job_id = None
+                if self.warning_count >= 20 and self.warning_count % 3 == 0 :
+                    print "Let's try save the instance"
+                    self.start_heart_beat(abu)
+
 
 
     def terminate(self, abu):
         if abu.conn: 
-            abu.conn.terminate_instances([self.inst_id])
+            try: 
+                abu.conn.terminate_instances([self.inst_id])
+            except EC2ResponseError:
+                pass
+
 
     def get_ip(self, abu):
         resv = abu.conn.get_all_instances([self.inst_id])[0] 
@@ -117,6 +135,7 @@ class AWSInstance(object):
             self.warning_count += 1
 
         print "warning_count on " + self.inst_id + " is " + str(self.warning_count)
+
 
         if self.warning_count > self.tolerance:
             return False
@@ -258,7 +277,7 @@ class Abu(object):
 
         if init_insts:
             for new_inst_id in init_insts:
-                print "Initializing from instgance: " + new_inst_id
+                print "Initializing from instance: " + new_inst_id
                 new_inst = AWSInstance(new_inst_id, self.hearts_path)
                 self.inst_ids.append(new_inst_id)
                 self.insts_pool[new_inst_id] = new_inst
@@ -267,7 +286,7 @@ class Abu(object):
                 try: 
                     new_inst_id  = self.new_instance()
                     self.inst_ids.append(new_inst_id)
-                    print "Creating instgance: " + new_inst_id
+                    print "Creating instance: " + new_inst_id
                     new_inst = AWSInstance(new_inst_id, self.hearts_path)
                     self.insts_pool[new_inst_id] = new_inst
                 except EC2ResponseError:
@@ -308,7 +327,7 @@ class Abu(object):
             #Start new instance to replace dead one
             new_inst_id  = self.new_instance()
             self.inst_ids.append(new_inst_id)
-            print "Creating instgance: " + new_inst_id
+            print "Creating instance: " + new_inst_id
             new_inst = AWSInstance(new_inst_id, self.hearts_path)
             self.insts_pool[new_inst_id] = new_inst
 
