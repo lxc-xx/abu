@@ -98,7 +98,7 @@ class AWSInstance(object):
                         abu.job_pool[self.job_id].status = JobStatus.DEAD
                     self.job_id = None
                 if self.warning_count >= 20 and self.warning_count % 3 == 0 :
-                    print "Let's try save the instance"
+                    print "Let's try to save the instance"
                     self.start_heart_beat(abu)
 
 
