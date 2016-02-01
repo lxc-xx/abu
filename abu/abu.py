@@ -399,7 +399,6 @@ class Abu(object):
             self.job_pool[job_id] = AWSJob(job_id, final_cmd, log_file, err_file, done_file, start_file, end_file)
             cmd_idx += 1
 
-
         while True:
             self.update_jobs()
             self.update_instances()
