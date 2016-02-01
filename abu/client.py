@@ -30,7 +30,7 @@ def main(argv):
             cmd = "head -%s %s | tail -%s | xargs -L 1 -I {} -P %s dumb.py {}" % (head, cmds_list_path, tail, parallel)
             proc = subprocess.Popen(cmd, shell=True)
 
-            os.sleep(2)
+            time.sleep(2)
 
             if proc.pid not in psutil.get_pid_list() or psutil.Process(proc.pid).status() is "zombie":
                 touch(end_file_path)
