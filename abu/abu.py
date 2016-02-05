@@ -220,7 +220,7 @@ class AWSJob(object):
 
 class Abu(object):
 
-    def __init__(self, key_file_path, key_name, security_group, ami_id, region, inst_num, inst_type, nfs_mount_dict, hearts_path, client_path, clust_name = "abu_test", terminate_on_del=True):
+    def __init__(self, key_file_path, key_name, security_group, ami_id, region, inst_num, inst_type, nfs_mount_dict, hearts_path, client_path, clust_name = "abu_test", terminate_on_del=True, terminate_on_finish=True, verbose=False):
         self.key_file_path = key_file_path
         self.key_name=key_name
         self.security_group=security_group
@@ -229,7 +229,12 @@ class Abu(object):
         self.inst_num=inst_num
         self.inst_type=inst_type
         self.nfs_mount_dict=nfs_mount_dict
-        self.conn = boto.ec2.connect_to_region(region)
+        try:
+            self.conn = boto.ec2.connect_to_region(region)
+        except EC2ResponseError as e: 
+            print "Cannot connect to AWS. Exiting..."
+            print "Message from AWS: {0}".format(e)
+            sys.exit(1)
         self.hearts_path =hearts_path
         self.client_path = client_path
 
@@ -241,12 +246,19 @@ class Abu(object):
 
         self.clust_name = clust_name
         self.terminate_on_del=terminate_on_del
+        self.terminate_on_finish=terminate_on_finish
+        self.verbos = verbose
 
 
 
     def __del__(self):
         if self.terminate_on_del: 
             self.terminate_instance()
+    
+    @staticmethod
+    def log(output, output_file = sys.stdout):
+        sys.stdout.write(output + "\n")
+
 
     def gen_nfs_cmd(self):
         mount_cmd = ";".join([" (mkdir -p " + directory + "; sudo mount " + self.nfs_mount_dict['host'] + ":" + directory + " " + directory + ")" for directory in self.nfs_mount_dict['mount_dirs']])
@@ -259,14 +271,21 @@ class Abu(object):
 
     @classmethod
     def abu_execute(cls,cmd):
-        sys.stderr.write( "Abu executes: " + cmd+"\n") 
+        Abu.log( "Abu executes: " + cmd)
         res = os.system(cmd) 
         if res != 0: 
-            sys.stderr.write( "Command failed: " + cmd + "\n") 
+            Abu.log( "Command failed: " + cmd) 
 
 
     def new_instance(self):
-        resv = self.conn.run_instances(self.ami_id, key_name=self.key_name, instance_type=self.inst_type, security_groups=[self.security_group]) 
+        try: 
+            resv = self.conn.run_instances(self.ami_id, key_name=self.key_name, instance_type=self.inst_type, security_groups=[self.security_group]) 
+        except EC2ResponseError as e: 
+            print "Cannot create new instance. Exiting"
+            print "Message from AWS: {0}".format(e)
+            sys.exit(1)
+
+
         inst = resv.instances[0] 
         start_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         self.conn.create_tags([inst.id], {"Name": "{%s %s}" % (self.clust_name,start_time) })
@@ -289,8 +308,8 @@ class Abu(object):
                     print "Creating instance: " + new_inst_id
                     new_inst = AWSInstance(new_inst_id, self.hearts_path)
                     self.insts_pool[new_inst_id] = new_inst
-                except EC2ResponseError:
-                    print "Instance creation failed. Check your limit."
+                except EC2ResponseError as e:
+                    print "Instance creation failed. Message from AWS: {0}".format(e)
 
         self.inst_num = len(self.inst_ids)
 
@@ -423,10 +442,31 @@ class Abu(object):
             self.update_instances()
 
             finished_cnt = 0
+            unstarted_cnt = 0
+
+            if unstarted_cnt == 0 and self.terminate_on_finish:
+                to_terminate = []
+
+                for inst_id in self.inst_ids: 
+                    inst = self.insts_pool[inst_id]
+                    if inst.status is InstStatus.IDLE:
+                        to_terminate.append(inst_id)
+
+                for inst_id in to_terminate: 
+                    inst = self.insts_pool[inst_id]
+                    print "Terminating: " + inst_id
+                    inst.terminate(self)
+                    self.inst_ids.remove(inst_id)
+
             for job_id in self.job_pool:
                 job = self.job_pool[job_id]
                 if job.status is JobStatus.FINISHED:
                     finished_cnt += 1
+                elif job.status is JobStatus.UNSTARTED:
+                    unstarted_cnt += 1
+                else:
+                    pass
+
 
             if finished_cnt == len(self.job_ids):
                 break
