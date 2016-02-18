@@ -330,6 +330,7 @@ class Abu(object):
 
     def update_instances(self):
         to_delete = []
+
         for inst_id in self.inst_ids:
             inst = self.insts_pool[inst_id]
             inst.update(self)
@@ -349,6 +350,8 @@ class Abu(object):
             print "Creating instance: " + new_inst_id
             new_inst = AWSInstance(new_inst_id, self.hearts_path)
             self.insts_pool[new_inst_id] = new_inst
+        
+
 
     def update_jobs(self):
         for job_id in self.job_pool:
@@ -443,8 +446,23 @@ class Abu(object):
 
             finished_cnt = 0
             unstarted_cnt = 0
+            dead_cnt = 0
 
-            if unstarted_cnt == 0 and self.terminate_on_finish:
+            for job_id in self.job_pool:
+                job = self.job_pool[job_id]
+                if job.status is JobStatus.FINISHED:
+                    finished_cnt += 1
+                elif job.status is JobStatus.UNSTARTED:
+                    unstarted_cnt += 1
+                elif job.status is JobStatus.DEAD:
+                    dead_cnt += 1
+                else:
+                    pass
+
+            if finished_cnt == len(self.job_ids):
+                break
+
+            if unstarted_cnt == 0 and dead_cnt == 0 and self.terminate_on_finish:
                 to_terminate = []
 
                 for inst_id in self.inst_ids: 
@@ -457,18 +475,5 @@ class Abu(object):
                     print "Terminating: " + inst_id
                     inst.terminate(self)
                     self.inst_ids.remove(inst_id)
-
-            for job_id in self.job_pool:
-                job = self.job_pool[job_id]
-                if job.status is JobStatus.FINISHED:
-                    finished_cnt += 1
-                elif job.status is JobStatus.UNSTARTED:
-                    unstarted_cnt += 1
-                else:
-                    pass
-
-
-            if finished_cnt == len(self.job_ids):
-                break
 
             time.sleep(5)
