@@ -285,6 +285,7 @@ class Abu(object):
             print "Message from AWS: {0}".format(e)
             sys.exit(1)
 
+        time.sleep(2)
 
         inst = resv.instances[0] 
         start_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
