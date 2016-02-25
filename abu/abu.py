@@ -261,7 +261,7 @@ class Abu(object):
 
 
     def gen_nfs_cmd(self):
-        mount_cmd = ";".join([" (mkdir -p " + directory + "; sudo mount " + self.nfs_mount_dict['host'] + ":" + directory + " " + directory + ")" for directory in self.nfs_mount_dict['mount_dirs']])
+        mount_cmd = ";".join([" (sudo mkdir -p " + directory + "; sudo mount " + self.nfs_mount_dict['host'] + ":" + directory + " " + directory + ")" for directory in self.nfs_mount_dict['mount_dirs']])
         return mount_cmd
 
     def gen_ssh_cmd(self,cmd, host, log_path = "/dev/null", err_path = "/dev/null", done_path = "/dev/null"):
